@@ -16,7 +16,7 @@ jobs:
         include:
           # A single entry for macOS that builds for both aarch64 and x86_64
           - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin --target x86_64-apple-darwin"
+            args: "--target aarch64-apple-darwin"
           - platform: "ubuntu-22.04"
             args: ""
           - platform: "windows-latest"
@@ -90,6 +90,4 @@ jobs:
           name: macos-build-artifacts
           path: |
             src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
             src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
