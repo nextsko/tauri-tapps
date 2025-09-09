@@ -20,8 +20,8 @@ jobs:
             args: "--target x86_64-apple-darwin"
           - platform: "ubuntu-22.04"
             args: ""
-          - platform: "ubuntu-22.04-arm" # Only available in public repos.
-            args: ""
+          # - platform: "ubuntu-22.04-arm" # Only available in public repos.
+          # args: ""
           - platform: "windows-latest"
             args: ""
 
@@ -66,3 +66,10 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-build-artifacts
+          path: |
+            src-tauri/target/release/
