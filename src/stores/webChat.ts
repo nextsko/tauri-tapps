@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { MarkdownConverter, getSystemInfo } from '../utils/markdown';
+import { saveJSON, loadJSON } from '../utils/storage';
 
 export interface Message {
   id: string;
@@ -17,12 +18,53 @@ export interface ParsedUrl {
   error?: string;
 }
 
+interface WebChatData {
+  messages: Message[];
+  parsedUrls: ParsedUrl[];
+  currentModel: string;
+}
+
+const WEBCHAT_FILE = 'webchat-data.json';
+
 export const useWebChatStore = defineStore('webChat', () => {
   const messages = ref<Message[]>([]);
   const parsedUrls = ref<ParsedUrl[]>([]);
   const currentModel = ref<string>('');
   const isLoading = ref(false);
   const converter = new MarkdownConverter();
+  const isDataLoaded = ref(false);
+
+  /**
+   * 保存数据到文件
+   */
+  async function saveData() {
+    try {
+      const data: WebChatData = {
+        messages: messages.value,
+        parsedUrls: parsedUrls.value,
+        currentModel: currentModel.value,
+      };
+      await saveJSON(WEBCHAT_FILE, data);
+    } catch (error) {
+      console.error('Failed to save webchat data:', error);
+    }
+  }
+
+  /**
+   * 从文件加载数据
+   */
+  async function loadData() {
+    try {
+      const data = await loadJSON(WEBCHAT_FILE) as WebChatData;
+      messages.value = data.messages || [];
+      parsedUrls.value = data.parsedUrls || [];
+      currentModel.value = data.currentModel || '';
+      isDataLoaded.value = true;
+    } catch (error) {
+      console.log('No saved webchat data found, starting fresh');
+      isDataLoaded.value = true;
+    }
+  }
 
   /**
    * 添加消息
@@ -35,6 +77,7 @@ export const useWebChatStore = defineStore('webChat', () => {
       timestamp: Date.now(),
     };
     messages.value.push(message);
+    saveData(); // 自动保存
     return message;
   }
 
@@ -50,6 +93,7 @@ export const useWebChatStore = defineStore('webChat', () => {
     };
     
     parsedUrls.value.push(parsed);
+    await saveData(); // 保存初始状态
     
     try {
       const markdown = await converter.urlToMarkdown(url);
@@ -60,6 +104,7 @@ export const useWebChatStore = defineStore('webChat', () => {
       parsed.error = error instanceof Error ? error.message : String(error);
     }
     
+    await saveData(); // 保存最终状态
     return parsed;
   }
 
@@ -102,6 +147,7 @@ export const useWebChatStore = defineStore('webChat', () => {
    */
   function clearMessages() {
     messages.value = [];
+    saveData(); // 自动保存
   }
 
   /**
@@ -111,6 +157,7 @@ export const useWebChatStore = defineStore('webChat', () => {
     const index = messages.value.findIndex(msg => msg.id === id);
     if (index !== -1) {
       messages.value.splice(index, 1);
+      saveData(); // 自动保存
     }
   }
 
@@ -136,6 +183,7 @@ export const useWebChatStore = defineStore('webChat', () => {
    */
   function clearParsedUrls() {
     parsedUrls.value = [];
+    saveData(); // 自动保存
   }
 
   /**
@@ -145,6 +193,7 @@ export const useWebChatStore = defineStore('webChat', () => {
     const index = parsedUrls.value.findIndex(u => u.id === id);
     if (index !== -1) {
       parsedUrls.value.splice(index, 1);
+      saveData(); // 自动保存
     }
   }
 
@@ -153,6 +202,7 @@ export const useWebChatStore = defineStore('webChat', () => {
     parsedUrls,
     currentModel,
     isLoading,
+    isDataLoaded,
     addMessage,
     parseUrl,
     htmlToMarkdown,
@@ -163,5 +213,7 @@ export const useWebChatStore = defineStore('webChat', () => {
     removeParsedUrl,
     deleteMessage,
     copyMessage,
+    saveData,
+    loadData,
   };
 });

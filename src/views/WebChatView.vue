@@ -370,8 +370,16 @@ const modelOptions = computed(() => {
 
 // 初始化
 onMounted(async () => {
+  // 加载 LLM 配置
   await settingsStore.loadLLMConfig();
-  if (modelOptions.value.length > 0) {
+  
+  // 加载聊天数据
+  if (!webChatStore.isDataLoaded) {
+    await webChatStore.loadData();
+  }
+  
+  // 如果没有选择模型，使用第一个
+  if (!currentModel.value && modelOptions.value.length > 0) {
     currentModel.value = modelOptions.value[0].value;
   }
 });

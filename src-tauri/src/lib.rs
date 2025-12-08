@@ -65,10 +65,7 @@ fn reset_storage_dir(app: AppHandle) -> Result<String, String> {
 async fn set_llm_config(
     app: AppHandle,
     config_req: LLMConfigRequest,
-) -> Result<String, String> {
-    eprintln!("set_llm_config called with base_url: {}, api_key: {}, models: {:?}", 
-              config_req.base_url, config_req.api_key, config_req.models);
-    
+) -> Result<String, String> {    
     let llm_state = app.state::<LLMState>();
     let mut config = llm_state.config.lock().await;
     config.base_url = config_req.base_url;
