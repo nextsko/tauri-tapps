@@ -92,7 +92,7 @@ import { useMessage } from 'naive-ui';
 import { v4 as uuidv4 } from 'uuid';
 import { onMounted, reactive, ref } from 'vue';
 import draggable from 'vuedraggable';
-import { saveJSON } from '../utils/storage';
+import { saveJSON, loadJSON } from '../utils/storage';
 
 interface Prompt {
   id: string;
@@ -113,7 +113,7 @@ const newPrompt = reactive({
 const prompts = ref<Prompt[]>([]);
 const isEditing = ref(false);
 
-const storageKey = 'prompts_data';
+const PROMPTS_FILE = 'prompts.json';
 
 const rules = {
   title: {
@@ -128,22 +128,24 @@ const rules = {
   },
 };
 
-const loadPrompts = () => {
+const loadPrompts = async () => {
   try {
-    const data = localStorage.getItem(storageKey);
-    if (data) {
-      prompts.value = JSON.parse(data);
+    const data = await loadJSON(PROMPTS_FILE);
+    if (Array.isArray(data)) {
+      prompts.value = data;
     }
   } catch (e) {
-    console.error('Failed to load prompts from localStorage', e);
+    console.log('No saved prompts found, starting with empty list');
+    prompts.value = [];
   }
 };
 
-const savePrompts = () => {
+const savePrompts = async () => {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(prompts.value));
+    await saveJSON(PROMPTS_FILE, prompts.value);
   } catch (e) {
-    console.error('Failed to save prompts to localStorage', e);
+    console.error('Failed to save prompts:', e);
+    message.error('保存失败');
   }
 };
 
@@ -154,9 +156,9 @@ const resetForm = () => {
   isEditing.value = false;
 };
 
-const handleSavePrompt = (e: MouseEvent) => {
+const handleSavePrompt = async (e: MouseEvent) => {
   e.preventDefault();
-  formRef.value?.validate((errors: any) => {
+  formRef.value?.validate(async (errors: any) => {
     if (!errors) {
       if (isEditing.value) {
         const index = prompts.value.findIndex((p) => p.id === newPrompt.id);
@@ -169,7 +171,7 @@ const handleSavePrompt = (e: MouseEvent) => {
         prompts.value.push({ ...newPrompt, id: newId });
         message.success('提示词添加成功！');
       }
-      savePrompts();
+      await savePrompts();
       resetForm();
     } else {
       message.error('请填写完整信息。');
@@ -177,9 +179,14 @@ const handleSavePrompt = (e: MouseEvent) => {
   });
 };
 
-const handleSavePromptToJSON = (e: MouseEvent) => {
+const handleSavePromptToJSON = async (e: MouseEvent) => {
   e.preventDefault();
-  saveJSON('prompt.json', prompts.value);
+  try {
+    await saveJSON('prompt-export.json', prompts.value);
+    message.success('已保存到本地配置目录');
+  } catch (error) {
+    message.error('保存失败');
+  }
 };
 
 const handleEdit = (prompt: Prompt) => {
@@ -189,11 +196,11 @@ const handleEdit = (prompt: Prompt) => {
   isEditing.value = true;
 };
 
-const handleDelete = (id: string) => {
+const handleDelete = async (id: string) => {
   const index = prompts.value.findIndex((p) => p.id === id);
   if (index !== -1) {
     prompts.value.splice(index, 1);
-    savePrompts();
+    await savePrompts();
     message.success('提示词已删除！');
     if (newPrompt.id === id) {
       resetForm();
@@ -238,12 +245,12 @@ const onFileSelected = (event: Event) => {
     return;
   }
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const importedData = JSON.parse(e.target?.result as string);
       if (Array.isArray(importedData)) {
         prompts.value = importedData;
-        savePrompts();
+        await savePrompts();
         message.success('提示词已成功导入！');
       } else {
         message.error('导入文件格式不正确，请选择有效的 JSON 文件。');
@@ -257,12 +264,12 @@ const onFileSelected = (event: Event) => {
   target.value = '';
 };
 
-const onDragChange = () => {
-  savePrompts();
+const onDragChange = async () => {
+  await savePrompts();
 };
 
-onMounted(() => {
-  loadPrompts();
+onMounted(async () => {
+  await loadPrompts();
 });
 </script>
 

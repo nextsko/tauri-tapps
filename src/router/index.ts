@@ -32,6 +32,11 @@ const router = createRouter({
       name: 'Smoji',
       component: () => import('../views/EmojiView.vue'),
     },
+    {
+      path: '/web-chat',
+      name: 'WebChat',
+      component: () => import('../views/WebChatView.vue'),
+    },
   ],
 });
 

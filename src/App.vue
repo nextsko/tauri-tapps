@@ -35,6 +35,7 @@ import {
   RobotOutlined,
   SettingOutlined,
   TranslationOutlined,
+  GlobalOutlined,
 } from "@vicons/antd";
 import { Emoji16Regular } from "@vicons/fluent";
 import { NIcon } from "naive-ui";
@@ -78,6 +79,11 @@ const menuOptions = [
     label: "Emoji 演示",
     key: "emoji",
     icon: () => h(NIcon, null, { default: () => h(Emoji16Regular) }),
+  },
+  {
+    label: "网页智能对话",
+    key: "web-chat",
+    icon: () => h(NIcon, null, { default: () => h(GlobalOutlined) }),
   },
   {
     label: "设置",

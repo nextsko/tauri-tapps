@@ -28,3 +28,6 @@ anyhow = "1.0.75"
 pdf-extract = "0.7.3"
 colored = "3"
 futures = "0.3"
+reqwest = { version = "0.12", features = ["json"] }
+scraper = "0.20"
+html2md = "0.2"

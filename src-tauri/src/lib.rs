@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 
 mod storage;
 mod llm;
+mod web_scraper;
 
 use storage::StorageState;
-use llm::LLMConfig;
+use llm::{LLMConfig, ChatMessage};
 
 /// LLM 配置请求
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,6 +86,30 @@ async fn prompt_llm(app: AppHandle, prompt: String) -> Result<String, String> {
     Ok(response)
 }
 
+#[tauri::command]
+async fn chat_with_context(
+    app: AppHandle,
+    model: String,
+    context: String,
+    messages: Vec<ChatMessage>,
+) -> Result<String, String> {
+    let llm_state = app.state::<LLMState>();
+    let config = llm_state.config.lock().await.clone();
+
+    let response = llm::chat_with_context(&config, &model, &context, messages).await;
+    Ok(response)
+}
+
+#[tauri::command]
+async fn fetch_url_to_markdown(url: String) -> Result<String, String> {
+    web_scraper::fetch_and_convert_to_markdown(&url).await
+}
+
+#[tauri::command]
+fn convert_html_to_markdown(html: String) -> Result<String, String> {
+    Ok(web_scraper::html_to_markdown(&html))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -104,7 +129,10 @@ pub fn run() {
             get_storage_dir,
             reset_storage_dir,
             set_llm_config,
-            prompt_llm
+            prompt_llm,
+            chat_with_context,
+            fetch_url_to_markdown,
+            convert_html_to_markdown
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
