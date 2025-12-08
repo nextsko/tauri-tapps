@@ -38,3 +38,40 @@ const dir = await getStorageDir();
 // 重置为默认
 await resetStorageDir();
 ```
+
+## 模型集成
+
+- 后端模块结构
+
+
+llm.rs - LLM 核心逻辑，支持多模型轮询
+lib.rs - 暴露 Tauri 命令接口
+暴露的接口
+
+
+前端使用示例
+
+```ts
+set_llm_config(baseUrl, apiKey, models) - 配置 LLM
+prompt_llm(prompt) - 提示 LLM
+
+import { setLLMConfig, promptLLM } from '@/utils/llm';
+
+// 配置 LLM
+await setLLMConfig({
+  baseUrl: 'https://api.longcat.chat/openai/v1',
+  apiKey: 'your-api-key',
+  models: ['LongCat-Flash-Chat', 'LongCat-Flash-Thinking'],
+});
+
+// 提示 LLM
+const response = await promptLLM('你好，你是谁？');
+console.log(response);
+```
+
+特性：
+
+支持自定义 API 密钥和基础 URL
+支持多模型轮询（如果一个模型失败，自动尝试下一个）
+模块化设计，易于扩展
+全局配置状态管理

@@ -1,7 +1,26 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
 
 mod storage;
+mod llm;
+
 use storage::StorageState;
+use llm::LLMConfig;
+
+/// LLM 配置请求
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LLMConfigRequest {
+    pub base_url: String,
+    pub api_key: String,
+    pub models: Vec<String>,
+}
+
+/// LLM 全局配置状态
+pub struct LLMState {
+    pub config: Mutex<LLMConfig>,
+}
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -41,12 +60,40 @@ fn reset_storage_dir(app: AppHandle) -> Result<String, String> {
     storage::reset_to_default(&app)
 }
 
+#[tauri::command]
+async fn set_llm_config(
+    app: AppHandle,
+    config_req: LLMConfigRequest,
+) -> Result<String, String> {
+    eprintln!("set_llm_config called with base_url: {}, api_key: {}, models: {:?}", 
+              config_req.base_url, config_req.api_key, config_req.models);
+    
+    let llm_state = app.state::<LLMState>();
+    let mut config = llm_state.config.lock().await;
+    config.base_url = config_req.base_url;
+    config.api_key = config_req.api_key;
+    config.models = config_req.models;
+    Ok("LLM config updated".to_string())
+}
+
+#[tauri::command]
+async fn prompt_llm(app: AppHandle, prompt: String) -> Result<String, String> {
+    let llm_state = app.state::<LLMState>();
+    let config = llm_state.config.lock().await.clone();
+
+    let response = llm::prompt_model(&config, &prompt).await;
+    Ok(response)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(StorageState {
             custom_dir: std::sync::Mutex::new(None),
+        })
+        .manage(LLMState {
+            config: Mutex::new(LLMConfig::default()),
         })
         .invoke_handler(tauri::generate_handler![
             greet,
@@ -55,7 +102,9 @@ pub fn run() {
             load_data,
             set_storage_dir,
             get_storage_dir,
-            reset_storage_dir
+            reset_storage_dir,
+            set_llm_config,
+            prompt_llm
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

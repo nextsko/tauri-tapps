@@ -9,7 +9,7 @@ pub struct StorageState {
 }
 
 /// 获取应用配置目录
-/// 如果设置了自定义目录，使用自定义目录
+/// 如果设置了自定义目录，使用自定义目录    
 /// 否则使用默认的应用配置目录
 /// Windows: C:\Users\[username]\AppData\Roaming\chat-app
 /// macOS: /Users/[username]/Library/Application Support/chat-app
