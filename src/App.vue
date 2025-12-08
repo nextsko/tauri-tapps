@@ -1,38 +1,60 @@
 <template>
   <n-message-provider>
-    <div class="app-container">
-      <n-layout has-sider>
-        <!-- 侧边栏 -->
-        <n-layout-sider
-          collapse-mode="width"
-          :collapsed-width="64"
-          :width="200"
-          :native-scrollbar="false"
-          show-trigger="bar"
-        >
-          <n-menu
-            :value="activeMenu"
-            :options="menuOptions"
-            @update:value="handleMenuChange"
-          />
-        </n-layout-sider>
+    <n-config-provider>
+      <div class="app-container">
+        <n-layout has-sider>
+          <!-- 侧边栏 -->
+          <n-layout-sider
+            collapse-mode="width"
+            :collapsed-width="64"
+            :width="200"
+            :native-scrollbar="false"
+            show-trigger="bar"
+            style="user-select: none"
+          >
+            <n-menu
+              :value="activeMenu"
+              :options="menuOptions"
+              @update:value="handleMenuChange"
+            />
+          </n-layout-sider>
 
-        <!-- 主内容区 -->
-        <n-layout>
-          <component :is="currentComponent" />
+          <!-- 主内容区 -->
+          <n-layout>
+            <router-view />
+          </n-layout>
         </n-layout>
-      </n-layout>
-    </div>
+      </div>
+    </n-config-provider>
   </n-message-provider>
 </template>
 
 <script lang="ts" setup>
-import { Robot } from "@vicons/fa";
-import { Book } from "@vicons/ionicons5";
+import {
+  BookOutlined,
+  RobotOutlined,
+  SettingOutlined,
+  TranslationOutlined,
+} from "@vicons/antd";
+import { Emoji16Regular } from "@vicons/fluent";
 import { NIcon } from "naive-ui";
-import { computed, ref } from "vue";
-import LLMDemo from "./LLMDemo.vue";
-import Prompt from "./Prompt.vue";
+import { h, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useSettingsStore } from "./stores/settings";
+
+const router = useRouter();
+const route = useRoute();
+const settingsStore = useSettingsStore();
+
+// 应用启动时加载配置
+onMounted(async () => {
+  try {
+    await settingsStore.loadLLMConfig();
+    console.log("LLM config loaded successfully");
+  } catch (error) {
+    console.error("Failed to load LLM config on app start:", error);
+  }
+});
 
 const activeMenu = ref("prompt");
 
@@ -40,32 +62,44 @@ const menuOptions = [
   {
     label: "提示词管理",
     key: "prompt",
-    icon: () => {
-      return h(NIcon, null, {
-        default: () => h(Book),
-      });
-    },
+    icon: () => h(NIcon, null, { default: () => h(BookOutlined) }),
+  },
+  {
+    label: "快捷翻译",
+    key: "translate",
+    icon: () => h(NIcon, null, { default: () => h(TranslationOutlined) }),
   },
   {
     label: "LLM 演示",
-    key: "llm",
-    icon: () => {
-      return h(NIcon, null, {
-        default: () => h(Robot),
-      });
-    },
+    key: "llm-demo",
+    icon: () => h(NIcon, null, { default: () => h(RobotOutlined) }),
+  },
+  {
+    label: "Emoji 演示",
+    key: "emoji",
+    icon: () => h(NIcon, null, { default: () => h(Emoji16Regular) }),
+  },
+  {
+    label: "设置",
+    key: "settings",
+    icon: () => h(NIcon, null, { default: () => h(SettingOutlined) }),
   },
 ];
 
-const currentComponent = computed(() => {
-  return activeMenu.value === "prompt" ? Prompt : LLMDemo;
-});
-
 const handleMenuChange = (key: string) => {
   activeMenu.value = key;
+  router.push(`/${key}`);
 };
 
-import { h } from "vue";
+// 监听路由变化更新菜单
+watch(
+  () => route.path,
+  (newPath) => {
+    const key = newPath.slice(1) || "prompt";
+    activeMenu.value = key;
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>

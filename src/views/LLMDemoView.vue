@@ -96,12 +96,7 @@
             <n-divider />
             <div class="response-header">
               <span>LLM 响应</span>
-              <n-button
-                text
-                type="primary"
-                size="small"
-                @click="copyResponse"
-              >
+              <n-button text type="primary" size="small" @click="copyResponse">
                 复制
               </n-button>
             </div>
@@ -123,7 +118,7 @@
 <script setup lang="ts">
 import { useMessage } from "naive-ui";
 import { reactive, ref } from "vue";
-import { setLLMConfig, promptLLM } from "./utils/llm";
+import { promptLLM, setLLMConfig } from "../utils/llm";
 
 const message = useMessage();
 const configFormRef = ref<any>(null);
@@ -175,7 +170,7 @@ const handleSetConfig = (e: MouseEvent) => {
         models: llmConfig.models,
       };
       console.log("Sending params:", params);
-      
+
       setLLMConfig({
         baseUrl: llmConfig.baseUrl,
         apiKey: llmConfig.apiKey,
