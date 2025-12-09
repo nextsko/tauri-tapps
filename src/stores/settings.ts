@@ -83,4 +83,8 @@ export const useSettingsStore = defineStore('settings', () => {
     setStorage,
     getStorage,
   };
+}, {
+  persist: {
+    pick: ['storageDir'],
+  },
 });

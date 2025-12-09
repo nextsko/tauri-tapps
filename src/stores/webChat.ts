@@ -218,4 +218,8 @@ export const useWebChatStore = defineStore("webChat", () => {
     saveData,
     loadData,
   };
+}, {
+  persist: {
+    pick: ['currentModel'],
+  },
 });

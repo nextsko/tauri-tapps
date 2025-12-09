@@ -5,6 +5,7 @@
         <n-layout has-sider>
           <!-- 侧边栏 -->
           <n-layout-sider
+            v-model:collapsed="uiStore.sidebarCollapsed"
             collapse-mode="width"
             :collapsed-width="64"
             :width="200"
@@ -13,7 +14,7 @@
             style="user-select: none"
           >
             <n-menu
-              :value="activeMenu"
+              :value="uiStore.activeMenu"
               :options="menuOptions"
               @update:value="handleMenuChange"
             />
@@ -45,12 +46,14 @@ import { NIcon } from "naive-ui";
 import { h, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSettingsStore } from "./stores/settings";
+import { useUIStore } from "./stores/ui";
 import UpdateChecker from "./components/UpdateChecker.vue";
 
 const router = useRouter();
 const route = useRoute();
 const updateCheckerRef = ref<InstanceType<typeof UpdateChecker>>();
 const settingsStore = useSettingsStore();
+const uiStore = useUIStore();
 
 // 应用启动时加载配置
 onMounted(async () => {
@@ -61,8 +64,6 @@ onMounted(async () => {
     console.error("Failed to load LLM config on app start:", error);
   }
 });
-
-const activeMenu = ref("prompt");
 
 const menuOptions = [
   {
@@ -98,7 +99,7 @@ const menuOptions = [
 ];
 
 const handleMenuChange = (key: string) => {
-  activeMenu.value = key;
+  uiStore.setActiveMenu(key);
   router.push(`/${key}`);
 };
 
@@ -107,7 +108,7 @@ watch(
   () => route.path,
   (newPath) => {
     const key = newPath.slice(1) || "prompt";
-    activeMenu.value = key;
+    uiStore.setActiveMenu(key);
   },
   { immediate: true }
 );
