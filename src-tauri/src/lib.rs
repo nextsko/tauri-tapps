@@ -111,6 +111,8 @@ fn convert_html_to_markdown(html: String) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(StorageState {
             custom_dir: std::sync::Mutex::new(None),
         })

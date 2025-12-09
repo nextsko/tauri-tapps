@@ -6,7 +6,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   publish-tauri:
@@ -93,10 +93,12 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && steps.version.outputs.version || '' }}
-          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Release {0}', steps.version.outputs.version) || '' }}
-          releaseBody: "查看 Assets 下载对应平台的安装包。"
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Chat App {0}', steps.version.outputs.version) || '' }}
+          releaseBody: "查看 Assets 下载对应平台的安装包。\n\n## 安装说明\n- Windows: 下载 `.msi` 或 `.exe` 文件\n- macOS: 下载 `.dmg` 文件\n- Linux: 下载 `.AppImage` 或 `.deb` 文件"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

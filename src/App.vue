@@ -25,6 +25,9 @@
           </n-layout>
         </n-layout>
       </div>
+
+      <!-- 更新检查器 -->
+      <UpdateChecker ref="updateCheckerRef" />
     </n-config-provider>
   </n-message-provider>
 </template>
@@ -42,9 +45,11 @@ import { NIcon } from "naive-ui";
 import { h, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSettingsStore } from "./stores/settings";
+import UpdateChecker from "./components/UpdateChecker.vue";
 
 const router = useRouter();
 const route = useRoute();
+const updateCheckerRef = ref<InstanceType<typeof UpdateChecker>>();
 const settingsStore = useSettingsStore();
 
 // 应用启动时加载配置

@@ -82,6 +82,29 @@
           </n-form-item>
         </n-form>
       </n-card>
+
+      <!-- 应用更新 -->
+      <n-card class="settings-card">
+        <template #header>
+          <span>应用更新</span>
+        </template>
+
+        <n-form label-placement="left" label-width="120">
+          <n-form-item label="当前版本">
+            <n-text>{{ appVersion }}</n-text>
+          </n-form-item>
+
+          <n-form-item>
+            <n-button
+              type="primary"
+              @click="handleCheckUpdate"
+              :loading="isCheckingUpdate"
+            >
+              检查更新
+            </n-button>
+          </n-form-item>
+        </n-form>
+      </n-card>
     </div>
   </div>
 </template>
@@ -91,6 +114,9 @@ import { useMessage } from 'naive-ui';
 import { onMounted, reactive, ref } from 'vue';
 import { useSettingsStore } from '../stores/settings';
 import { resetStorageDir } from '../utils/storage';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+import { getVersion } from '@tauri-apps/api/app';
 
 const message = useMessage();
 const settingsStore = useSettingsStore();
@@ -104,6 +130,8 @@ const llmConfig = reactive({
 
 const currentStorageDir = ref('');
 const customStorageDir = ref('');
+const appVersion = ref('');
+const isCheckingUpdate = ref(false);
 
 const llmRules = {
   apiKey: {
@@ -183,7 +211,43 @@ const handleRefreshStorageDir = async () => {
   }
 };
 
+const handleCheckUpdate = async () => {
+  isCheckingUpdate.value = true;
+  try {
+    const update = await check();
+
+    if (update?.available) {
+      const confirmed = confirm(
+        `发现新版本 ${update.version}\n\n${update.body || ''}\n\n是否立即更新？`
+      );
+
+      if (confirmed) {
+        message.info('开始下载更新...');
+        await update.downloadAndInstall();
+        message.success('更新完成，即将重启应用');
+        setTimeout(async () => {
+          await relaunch();
+        }, 1000);
+      }
+    } else {
+      message.success('当前已是最新版本');
+    }
+  } catch (error) {
+    console.error('检查更新失败:', error);
+    message.error(`检查更新失败: ${error}`);
+  } finally {
+    isCheckingUpdate.value = false;
+  }
+};
+
 onMounted(async () => {
+  // 加载应用版本
+  try {
+    appVersion.value = await getVersion();
+  } catch (error) {
+    console.error('Failed to get app version:', error);
+  }
+
   // 加载当前存储目录
   try {
     const dir = await settingsStore.getStorage();
