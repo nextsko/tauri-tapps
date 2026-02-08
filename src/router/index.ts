@@ -13,6 +13,11 @@ const router = createRouter({
       component: () => import('../views/PromptView.vue'),
     },
     {
+      path: '/agent-hub',
+      name: 'AgentHub',
+      component: () => import('../views/AgentHubView.vue'),
+    },
+    {
       path: '/translate',
       name: 'Translate',
       component: () => import('../views/TranslateView.vue'),

@@ -10,14 +10,27 @@
             :collapsed-width="64"
             :width="200"
             :native-scrollbar="false"
-            show-trigger="bar"
+            :show-trigger="false"
             style="user-select: none"
           >
-            <n-menu
-              :value="uiStore.activeMenu"
-              :options="menuOptions"
-              @update:value="handleMenuChange"
-            />
+            <div class="sider-body">
+              <n-menu
+                class="sider-menu"
+                :value="uiStore.activeMenu"
+                :options="menuOptions"
+                @update:value="handleMenuChange"
+              />
+
+              <div class="sider-footer">
+                <n-button quaternary size="small" @click="uiStore.sidebarCollapsed = !uiStore.sidebarCollapsed">
+                  <template #icon>
+                    <n-icon>
+                      <component :is="uiStore.sidebarCollapsed ? MenuUnfoldOutlined : MenuFoldOutlined" />
+                    </n-icon>
+                  </template>
+                </n-button>
+              </div>
+            </div>
           </n-layout-sider>
 
           <!-- 主内容区 -->
@@ -36,14 +49,17 @@
 <script lang="ts" setup>
 import {
   BookOutlined,
+  AppstoreOutlined,
   RobotOutlined,
   SettingOutlined,
   TranslationOutlined,
   GlobalOutlined,
+  SmileOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from "@vicons/antd";
-import { Emoji16Regular } from "@vicons/fluent";
 import { NIcon } from "naive-ui";
-import { h, onMounted, ref, watch } from "vue";
+import { h, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSettingsStore } from "./stores/settings";
 import { useUIStore } from "./stores/ui";
@@ -51,7 +67,6 @@ import UpdateChecker from "./components/UpdateChecker.vue";
 
 const router = useRouter();
 const route = useRoute();
-const updateCheckerRef = ref<InstanceType<typeof UpdateChecker>>();
 const settingsStore = useSettingsStore();
 const uiStore = useUIStore();
 
@@ -72,6 +87,11 @@ const menuOptions = [
     icon: () => h(NIcon, null, { default: () => h(BookOutlined) }),
   },
   {
+    label: "Agent 协作中心",
+    key: "agent-hub",
+    icon: () => h(NIcon, null, { default: () => h(AppstoreOutlined) }),
+  },
+  {
     label: "快捷翻译",
     key: "translate",
     icon: () => h(NIcon, null, { default: () => h(TranslationOutlined) }),
@@ -84,7 +104,7 @@ const menuOptions = [
   {
     label: "Emoji 演示",
     key: "emoji",
-    icon: () => h(NIcon, null, { default: () => h(Emoji16Regular) }),
+    icon: () => h(NIcon, null, { default: () => h(SmileOutlined) }),
   },
   {
     label: "网页智能对话",
@@ -119,6 +139,23 @@ watch(
   width: 100%;
   height: 100vh;
 }
+
+ .sider-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+ }
+
+ .sider-menu {
+  flex: 1;
+  min-height: 0;
+ }
+
+ .sider-footer {
+  padding: 8px 8px 12px;
+  display: flex;
+  justify-content: center;
+ }
 
 :deep(.n-layout) {
   height: 100%;
