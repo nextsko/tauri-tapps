@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 mod storage;
 mod llm;
 mod web_scraper;
+mod webdav;
 
 use storage::StorageState;
 use llm::{LLMConfig, ChatMessage};
@@ -65,7 +66,7 @@ fn reset_storage_dir(app: AppHandle) -> Result<String, String> {
 async fn set_llm_config(
     app: AppHandle,
     config_req: LLMConfigRequest,
-) -> Result<String, String> {    
+) -> Result<String, String> {
     let llm_state = app.state::<LLMState>();
     let mut config = llm_state.config.lock().await;
     config.base_url = config_req.base_url;
@@ -103,8 +104,29 @@ async fn fetch_url_to_markdown(url: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn read_file_content(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[tauri::command]
 fn convert_html_to_markdown(html: String) -> Result<String, String> {
     Ok(web_scraper::html_to_markdown(&html))
+}
+
+#[tauri::command]
+async fn test_webdav(app: AppHandle, config: webdav::WebDavConfig) -> Result<String, String> {
+    webdav::test(app, config).await
+}
+
+#[tauri::command]
+async fn backup_to_webdav(app: AppHandle, config: webdav::WebDavConfig) -> Result<String, String> {
+    webdav::backup(app, config).await
+}
+
+#[tauri::command]
+async fn restore_from_webdav(app: AppHandle, config: webdav::WebDavConfig) -> Result<String, String> {
+    webdav::restore(app, config).await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -131,7 +153,11 @@ pub fn run() {
             prompt_llm,
             chat_with_context,
             fetch_url_to_markdown,
-            convert_html_to_markdown
+            convert_html_to_markdown,
+            read_file_content,
+            test_webdav,
+            backup_to_webdav,
+            restore_from_webdav
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
