@@ -14,6 +14,9 @@ export interface ParsedUrl {
   id: string;
   url: string;
   markdown: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
   status: "pending" | "success" | "error";
   error?: string;
 }
@@ -22,14 +25,19 @@ interface WebChatData {
   messages: Message[];
   parsedUrls: ParsedUrl[];
   currentModel: string;
+  systemPrompt: string;
 }
 
 const WEBCHAT_FILE = "webchat-data.json";
+
+const DEFAULT_SYSTEM_PROMPT = `你是一个智能助手，可以帮助用户分析和理解网页内容。
+请根据用户提供的网页内容回答问题，保持回答准确、简洁、有帮助。`;
 
 export const useWebChatStore = defineStore("webChat", () => {
   const messages = ref<Message[]>([]);
   const parsedUrls = ref<ParsedUrl[]>([]);
   const currentModel = ref<string>("");
+  const systemPrompt = ref<string>(DEFAULT_SYSTEM_PROMPT);
   const isLoading = ref(false);
   const converter = new MarkdownConverter();
   const isDataLoaded = ref(false);
@@ -43,6 +51,7 @@ export const useWebChatStore = defineStore("webChat", () => {
         messages: messages.value,
         parsedUrls: parsedUrls.value,
         currentModel: currentModel.value,
+        systemPrompt: systemPrompt.value,
       };
       await saveJSON(WEBCHAT_FILE, data);
     } catch (error) {
@@ -57,8 +66,14 @@ export const useWebChatStore = defineStore("webChat", () => {
     try {
       const data = (await loadJSON(WEBCHAT_FILE)) as WebChatData;
       messages.value = data.messages || [];
-      parsedUrls.value = data.parsedUrls || [];
+      parsedUrls.value = (data.parsedUrls || []).map((p) => ({
+        ...p,
+        tags: Array.isArray((p as any).tags) ? (p as any).tags : [],
+        createdAt: typeof (p as any).createdAt === "number" ? (p as any).createdAt : Date.now(),
+        updatedAt: typeof (p as any).updatedAt === "number" ? (p as any).updatedAt : Date.now(),
+      }));
       currentModel.value = data.currentModel || "";
+      systemPrompt.value = data.systemPrompt || DEFAULT_SYSTEM_PROMPT;
       isDataLoaded.value = true;
     } catch (error) {
       console.log("No saved webchat data found, starting fresh");
@@ -89,6 +104,9 @@ export const useWebChatStore = defineStore("webChat", () => {
       id: crypto.randomUUID(),
       url,
       markdown: "",
+      tags: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       status: "pending",
     };
 
@@ -99,9 +117,11 @@ export const useWebChatStore = defineStore("webChat", () => {
       const markdown = await converter.urlToMarkdown(url);
       parsed.markdown = markdown;
       parsed.status = "success";
+      parsed.updatedAt = Date.now();
     } catch (error) {
       parsed.status = "error";
       parsed.error = error instanceof Error ? error.message : String(error);
+      parsed.updatedAt = Date.now();
     }
 
     await saveData(); // 保存最终状态
@@ -116,10 +136,17 @@ export const useWebChatStore = defineStore("webChat", () => {
   }
 
   /**
-   * 构建完整的上下文（包含系统信息和解析的网页内容）
+   * 构建完整的上下文（包含系统提示词、系统信息和解析的网页内容）
    */
   function buildContext(): string {
-    let context = getSystemInfo() + "\n\n";
+    let context = "";
+
+    // 添加系统提示词
+    if (systemPrompt.value.trim()) {
+      context += systemPrompt.value + "\n\n";
+    }
+
+    context += getSystemInfo() + "\n\n";
 
     const successUrls = parsedUrls.value.filter((u) => u.status === "success");
     if (successUrls.length > 0) {
@@ -203,6 +230,7 @@ export const useWebChatStore = defineStore("webChat", () => {
     messages,
     parsedUrls,
     currentModel,
+    systemPrompt,
     isLoading,
     isDataLoaded,
     addMessage,
