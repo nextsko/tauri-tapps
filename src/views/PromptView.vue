@@ -1,406 +1,705 @@
 <template>
-  <div class="prompt-tool">
-    <div class="header">
-      <h1>Prompt 管理工具</h1>
-      <p>轻松管理你的提示词，让创作更高效。</p>
-    </div>
-
-    <div class="main-content">
-      <n-card class="prompt-form-card">
-        <n-form
-          ref="formRef"
-          :model="newPrompt"
-          :rules="rules"
-          label-placement="left"
-          label-width="80"
-        >
-          <n-form-item label="标题" path="title">
-            <n-input v-model:value="newPrompt.title" placeholder="请输入标题" />
-          </n-form-item>
-          <n-form-item label="提示词" path="content">
-            <n-input
-              v-model:value="newPrompt.content"
-              type="textarea"
-              placeholder="请输入提示词内容"
-              :autosize="{ minRows: 3, maxRows: 10 }"
-            />
-          </n-form-item>
-          <n-form-item>
-            <n-button type="primary" @click="handleSavePrompt">
-              {{ isEditing ? '保存修改' : '添加提示词' }}
-            </n-button>
-            <n-button type="primary" @click="handleSavePromptToJSON">
-              保存到本地
-            </n-button>
-          </n-form-item>
-        </n-form>
-      </n-card>
-
-      <n-card class="prompt-list-card">
+  <div class="prompt-studio">
+    <div class="studio-left">
+      <n-card :bordered="false" class="pane">
         <template #header>
-          <div class="card-header-actions">
-            <span class="card-title">我的提示词</span>
-            <div class="action-buttons">
-              <n-button @click="handleExport" size="small">导出</n-button>
-              <n-button @click="handleImport" size="small">导入</n-button>
-            </div>
-          </div>
+          <n-space justify="space-between" align="center">
+            <n-text strong>Prompt 库</n-text>
+            <n-button size="small" type="primary" @click="createEmpty">新建</n-button>
+          </n-space>
         </template>
 
-        <div class="prompt-list-container">
-          <draggable v-model="prompts" item-key="id" @change="onDragChange">
-            <template #item="{ element: prompt }">
-              <n-list bordered class="draggable-list">
-                <n-list-item @dblclick="copyToClipboard(prompt.content)">
-                  <div class="list-item-content">
-                    <div class="prompt-info">
-                      <n-h3>{{ prompt.title }}</n-h3>
-                      <n-p class="prompt-content-text">{{ prompt.content }}</n-p>
-                    </div>
-                    <div class="actions">
-                      <n-button type="info" size="small" @click="handleEdit(prompt)">
-                        编辑
-                      </n-button>
-                      <n-button type="error" size="small" @click="handleDelete(prompt.id)">
-                        删除
-                      </n-button>
-                    </div>
-                  </div>
-                </n-list-item>
-              </n-list>
-            </template>
-          </draggable>
-        </div>
-        <div v-if="prompts.length === 0" class="no-data">
-          <n-empty description="暂无提示词，快来添加一个吧！" />
+        <div class="left-body">
+          <n-input v-model:value="searchQuery" clearable placeholder="搜索标题..." />
+
+          <div class="prompt-list">
+            <n-empty v-if="filteredPrompts.length === 0" description="暂无 Prompt" />
+            <div
+              v-else
+              v-for="p in filteredPrompts"
+              :key="p.id"
+              class="prompt-item"
+              :class="{ active: p.id === selectedPromptId }"
+              @click="selectPrompt(p.id)"
+            >
+              <div class="prompt-item-top">
+                <div class="prompt-title">{{ p.title }}</div>
+                <n-tag size="tiny" round :bordered="false" type="success">v{{ getVersionCount(p.id) }}</n-tag>
+              </div>
+              <div class="prompt-meta">{{ formatTime(p.updatedAt || p.createdAt) }}</div>
+              <div class="prompt-tags" v-if="p.tags && p.tags.length">
+                <n-tag v-for="t in p.tags.slice(0, 3)" :key="t" size="tiny" round :bordered="false" class="prompt-tag">{{ t }}</n-tag>
+                <n-text depth="3" v-if="p.tags.length > 3">+{{ p.tags.length - 3 }}</n-text>
+              </div>
+            </div>
+          </div>
         </div>
       </n-card>
     </div>
 
-    <input
-      type="file"
-      ref="fileInputRef"
-      style="display: none"
-      @change="onFileSelected"
-      accept=".json"
-    />
+    <div class="studio-center">
+      <n-card :bordered="false" class="pane" v-if="selectedPrompt && selectedVersion">
+        <template #header>
+          <n-space justify="space-between" align="center" class="center-toolbar">
+            <n-space align="center" :size="10">
+              <n-input v-model:value="editTitle" placeholder="Prompt 标题" style="width: 360px" />
+              <n-button size="small" @click="saveMeta">保存信息</n-button>
+            </n-space>
+            <n-space align="center" :size="8">
+              <n-button size="small" :disabled="!editContent.trim()" @click="copyContent">复制</n-button>
+              <n-button size="small" :disabled="!editContent.trim()" @click="copyAsSystem">复制为 system</n-button>
+              <n-button size="small" @click="showGenModal = true">自动生成</n-button>
+              <n-button size="small" @click="snapshot">保存新版本</n-button>
+              <n-button size="small" type="error" @click="removePrompt">删除</n-button>
+            </n-space>
+          </n-space>
+        </template>
+
+        <div class="center-body">
+          <div class="version-bar">
+            <n-text depth="3">版本：</n-text>
+            <div class="version-tags">
+              <n-tag
+                v-for="(v, idx) in orderedVersions"
+                :key="v.id"
+                size="small"
+                round
+                :bordered="false"
+                :type="v.id === selectedPrompt?.currentVersionId ? 'success' : 'default'"
+                class="version-tag"
+                :title="versionHint(v, idx)"
+                @click="selectVersion(v.id)"
+              >
+                v{{ idx + 1 }}
+              </n-tag>
+            </div>
+          </div>
+
+          <div class="editor-wrap">
+            <MonacoEditor v-model="editContent" language="markdown" theme="vs" />
+          </div>
+        </div>
+      </n-card>
+
+      <n-card v-else :bordered="false" class="pane">
+        <n-empty description="请选择或新建一个 Prompt" />
+      </n-card>
+    </div>
+
+    <div class="studio-right">
+      <n-card :bordered="false" class="pane">
+        <template #header>
+          <n-text strong>测试台（V1）</n-text>
+        </template>
+        <div class="testbench">
+          <n-text depth="3">使用当前 Prompt（当前版本）作为 system，上下文将按多轮对话拼接调用。</n-text>
+
+          <div class="test-messages">
+            <n-empty v-if="testMessages.length === 0" description="暂无对话，输入一句话开始测试" />
+            <div v-else class="test-message" v-for="m in testMessages" :key="m.id">
+              <div class="test-message-meta">
+                <n-tag size="tiny" round :bordered="false" :type="m.role === 'user' ? 'info' : 'success'">{{ m.role }}</n-tag>
+                <span class="test-message-time">{{ formatTime(m.timestamp) }}</span>
+                <n-button size="tiny" quaternary @click="copyText(m.content)">复制</n-button>
+              </div>
+              <div class="test-message-content">
+                <MarkdownRenderer :content="m.content" />
+              </div>
+            </div>
+          </div>
+
+          <n-input
+            v-model:value="testInput"
+            type="textarea"
+            :autosize="{ minRows: 3, maxRows: 8 }"
+            placeholder="输入用户消息（Enter 发送，Shift+Enter 换行）"
+            @keydown.enter.exact.prevent="sendTest"
+          />
+
+          <n-space justify="space-between" align="center" :size="8">
+            <n-button size="small" :disabled="testMessages.length === 0" @click="clearTest">清空</n-button>
+            <n-button type="primary" size="small" :loading="isTestLoading" :disabled="!canSendTest" @click="sendTest">发送</n-button>
+          </n-space>
+        </div>
+      </n-card>
+    </div>
   </div>
+
+  <n-modal v-model:show="showGenModal" preset="card" title="Prompt 自动生成" style="width: min(1200px, 94vw)" :bordered="false">
+    <template #header-extra>
+      <n-space align="center" :size="8">
+        <n-button size="small" @click="resetGen">重置</n-button>
+        <n-button type="primary" size="small" :loading="isGenerating" :disabled="!genForm.purpose.trim()" @click="generatePromptContent">
+          生成
+        </n-button>
+      </n-space>
+    </template>
+
+    <div class="gen-modal">
+      <n-text depth="3">填写信息后生成 Prompt。可选 URL/外部资料会被作为上下文参与生成。</n-text>
+      <div class="gen-grid">
+        <div class="gen-panel">
+          <div class="gen-panel-title">核心信息</div>
+          <div class="gen-panel-body">
+            <n-form label-placement="top">
+              <n-form-item label="目的">
+                <n-input v-model:value="genForm.purpose" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" placeholder="这个 Prompt 要解决什么问题？" />
+              </n-form-item>
+              <n-form-item label="角色">
+                <n-input v-model:value="genForm.role" placeholder="例如：专业助理/代码审查官/文档生成器" />
+              </n-form-item>
+              <n-form-item label="风格">
+                <n-input v-model:value="genForm.style" placeholder="例如：结构化、简洁、可执行" />
+              </n-form-item>
+              <n-form-item label="约束">
+                <n-input v-model:value="genForm.constraints" type="textarea" :autosize="{ minRows: 2, maxRows: 6 }" placeholder="例如：不要编造/输出 JSON/必须给出步骤" />
+              </n-form-item>
+            </n-form>
+          </div>
+        </div>
+
+        <div class="gen-panel">
+          <div class="gen-panel-title">上下文资料</div>
+          <div class="gen-panel-body">
+            <n-form label-placement="top">
+              <n-form-item label="URL">
+                <n-input v-model:value="genForm.sourceUrl" placeholder="https://...（可选）" />
+              </n-form-item>
+              <n-form-item label="外部资料">
+                <n-input v-model:value="genForm.sourceText" type="textarea" :autosize="{ minRows: 4, maxRows: 10 }" placeholder="可选：粘贴资料/规范/需求作为上下文" />
+              </n-form-item>
+              <n-form-item label="写入后">
+                <n-space align="center" :size="10">
+                  <n-switch v-model:value="genForm.saveAsNewVersion" size="small" />
+                  <n-text depth="3">自动保存为新版本</n-text>
+                </n-space>
+              </n-form-item>
+            </n-form>
+          </div>
+        </div>
+
+        <div class="gen-panel gen-preview-panel">
+          <div class="gen-panel-title">生成预览</div>
+          <div class="gen-panel-body gen-preview-body">
+            <div class="gen-preview">
+              <MonacoEditor v-model="genPreview" language="markdown" theme="vs" />
+            </div>
+            <n-space justify="end" :size="8">
+              <n-button size="small" :disabled="!genPreview.trim()" @click="applyGenerated">应用到编辑器</n-button>
+            </n-space>
+          </div>
+        </div>
+      </div>
+    </div>
+  </n-modal>
 </template>
 
 <script setup lang="ts">
-import { useMessage } from 'naive-ui';
-import { v4 as uuidv4 } from 'uuid';
-import { onMounted, reactive, ref } from 'vue';
-import draggable from 'vuedraggable';
-import { saveJSON, loadJSON } from '../utils/storage';
-
-interface Prompt {
-  id: string;
-  title: string;
-  content: string;
-}
+import { useMessage } from "naive-ui";
+import { storeToRefs } from "pinia";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import MarkdownRenderer from "../components/MarkdownRenderer.vue";
+import MonacoEditor from "../components/MonacoEditor.vue";
+import { useAgentHubStore } from "../stores/agentHub";
+import { usePromptsStore, type PromptVersion } from "../stores/prompts";
+import { promptLLM } from "../utils/llm";
 
 const message = useMessage();
-const formRef = ref<any>(null);
-const fileInputRef = ref<HTMLInputElement | null>(null);
+const hubStore = useAgentHubStore();
+const promptsStore = usePromptsStore();
+const { prompts, selectedPromptId, selectedPrompt, selectedVersion, selectedPromptVersions } = storeToRefs(promptsStore);
 
-const newPrompt = reactive({
-  id: '',
-  title: '',
-  content: '',
+const searchQuery = ref("");
+
+const editTitle = ref("");
+const editContent = ref("");
+
+const showGenModal = ref(false);
+const isGenerating = ref(false);
+const genPreview = ref("");
+const genForm = reactive({
+  purpose: "",
+  role: "",
+  style: "结构清晰、可执行、简洁",
+  constraints: "",
+  sourceUrl: "",
+  sourceText: "",
+  saveAsNewVersion: true,
 });
 
-const prompts = ref<Prompt[]>([]);
-const isEditing = ref(false);
-
-const PROMPTS_FILE = 'prompts.json';
-
-const rules = {
-  title: {
-    required: true,
-    message: '请输入标题',
-    trigger: ['blur', 'input'],
-  },
-  content: {
-    required: true,
-    message: '请输入提示词内容',
-    trigger: ['blur', 'input'],
-  },
+type TestMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
 };
 
-const loadPrompts = async () => {
-  try {
-    const data = await loadJSON(PROMPTS_FILE);
-    if (Array.isArray(data)) {
-      prompts.value = data;
-    }
-  } catch (e) {
-    console.log('No saved prompts found, starting with empty list');
-    prompts.value = [];
-  }
-};
+const testMessages = ref<TestMessage[]>([]);
+const testInput = ref("");
+const isTestLoading = ref(false);
 
-const savePrompts = async () => {
-  try {
-    await saveJSON(PROMPTS_FILE, prompts.value);
-  } catch (e) {
-    console.error('Failed to save prompts:', e);
-    message.error('保存失败');
-  }
-};
+const canSendTest = computed(() => {
+  if (!selectedPrompt.value || !selectedVersion.value) return false;
+  return !!testInput.value.trim();
+});
 
-const resetForm = () => {
-  newPrompt.id = '';
-  newPrompt.title = '';
-  newPrompt.content = '';
-  isEditing.value = false;
-};
+const filteredPrompts = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q) return prompts.value;
+  return prompts.value.filter((p) => p.title.toLowerCase().includes(q));
+});
 
-const handleSavePrompt = async (e: MouseEvent) => {
-  e.preventDefault();
-  formRef.value?.validate(async (errors: any) => {
-    if (!errors) {
-      if (isEditing.value) {
-        const index = prompts.value.findIndex((p) => p.id === newPrompt.id);
-        if (index !== -1) {
-          prompts.value[index] = { ...newPrompt };
-          message.success('提示词修改成功！');
-        }
-      } else {
-        const newId = uuidv4();
-        prompts.value.push({ ...newPrompt, id: newId });
-        message.success('提示词添加成功！');
-      }
-      await savePrompts();
-      resetForm();
-    } else {
-      message.error('请填写完整信息。');
-    }
+const orderedVersions = computed(() =>
+  [...selectedPromptVersions.value].sort((a, b) => a.createdAt - b.createdAt)
+);
+
+function getVersionCount(promptId: string) {
+  const p = prompts.value.find((x) => x.id === promptId);
+  return p ? (Array.isArray(p.versionIds) ? p.versionIds.length : 0) : 0;
+}
+
+function selectPrompt(id: string) {
+  promptsStore.selectPrompt(id);
+}
+
+async function createEmpty() {
+  await promptsStore.createPrompt({
+    title: "新 Prompt",
+    tags: [],
+    content: "",
+    note: "init",
   });
-};
+}
 
-const handleSavePromptToJSON = async (e: MouseEvent) => {
-  e.preventDefault();
-  try {
-    await saveJSON('prompt-export.json', prompts.value);
-    message.success('已保存到本地配置目录');
-  } catch (error) {
-    message.error('保存失败');
-  }
-};
+async function saveMeta() {
+  if (!selectedPrompt.value) return;
+  await promptsStore.updatePromptMeta(selectedPrompt.value.id, {
+    title: editTitle.value,
+  });
+  message.success("已保存");
+}
 
-const handleEdit = (prompt: Prompt) => {
-  newPrompt.id = prompt.id;
-  newPrompt.title = prompt.title;
-  newPrompt.content = prompt.content;
-  isEditing.value = true;
-};
+async function snapshot() {
+  if (!selectedPrompt.value) return;
+  await promptsStore.saveNewVersion(selectedPrompt.value.id, editContent.value, "manual");
+  message.success("已保存新版本");
+}
 
-const handleDelete = async (id: string) => {
-  const index = prompts.value.findIndex((p) => p.id === id);
-  if (index !== -1) {
-    prompts.value.splice(index, 1);
-    await savePrompts();
-    message.success('提示词已删除！');
-    if (newPrompt.id === id) {
-      resetForm();
-    }
-  }
-};
+async function selectVersion(versionId: string) {
+  if (!selectedPrompt.value) return;
+  await promptsStore.setCurrentVersion(selectedPrompt.value.id, versionId);
+}
 
-const copyToClipboard = async (text: string) => {
+function versionHint(version: PromptVersion, index: number) {
+  const note = version.note ? ` · ${version.note}` : "";
+  return `v${index + 1} · ${formatTime(version.createdAt)}${note}`;
+}
+
+async function removePrompt() {
+  if (!selectedPrompt.value) return;
+  await promptsStore.deletePrompt(selectedPrompt.value.id);
+  message.success("已删除");
+}
+
+async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text);
-    message.success('复制成功！');
-  } catch (err) {
-    message.error('复制失败，请手动复制。');
-    console.error('Failed to copy: ', err);
+    message.success("已复制");
+  } catch {
+    message.error("复制失败");
   }
-};
+}
 
-const handleExport = () => {
-  if (prompts.value.length === 0) {
-    message.warning('没有提示词可以导出。');
-    return;
+function buildTestPrompt(nextUserMessage: string) {
+  const system = String(editContent.value || "").trim();
+  const lines: string[] = [];
+  if (system) {
+    lines.push("=== SYSTEM PROMPT ===");
+    lines.push(system);
+    lines.push("");
   }
-  const dataStr = JSON.stringify(prompts.value, null, 2);
-  const blob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `prompts_export_${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  message.success('提示词已成功导出为 JSON 文件！');
-};
 
-const handleImport = () => {
-  fileInputRef.value?.click();
-};
-
-const onFileSelected = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (!file) {
-    return;
+  lines.push("=== CHAT ===");
+  for (const m of testMessages.value) {
+    const role = m.role === "user" ? "USER" : "ASSISTANT";
+    lines.push(`${role}: ${m.content}`);
   }
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const importedData = JSON.parse(e.target?.result as string);
-      if (Array.isArray(importedData)) {
-        prompts.value = importedData;
-        await savePrompts();
-        message.success('提示词已成功导入！');
-      } else {
-        message.error('导入文件格式不正确，请选择有效的 JSON 文件。');
-      }
-    } catch (error) {
-      message.error('导入失败，文件内容有误。');
-      console.error('Import failed:', error);
+  lines.push(`USER: ${nextUserMessage}`);
+  lines.push("ASSISTANT:");
+  return lines.join("\n");
+}
+
+function clearTest() {
+  testMessages.value = [];
+  testInput.value = "";
+}
+
+async function sendTest() {
+  if (!canSendTest.value) return;
+  const userMsg = testInput.value.trim();
+  testInput.value = "";
+
+  testMessages.value.push({
+    id: crypto.randomUUID(),
+    role: "user",
+    content: userMsg,
+    timestamp: Date.now(),
+  });
+
+  isTestLoading.value = true;
+  try {
+    const prompt = buildTestPrompt(userMsg);
+    const res = await promptLLM(prompt);
+    const text = String(res || "").trim();
+    testMessages.value.push({
+      id: crypto.randomUUID(),
+      role: "assistant",
+      content: text,
+      timestamp: Date.now(),
+    });
+  } finally {
+    isTestLoading.value = false;
+  }
+}
+
+async function copyContent() {
+  await copyText(editContent.value);
+}
+
+async function copyAsSystem() {
+  const text = `SYSTEM PROMPT\n\n${editContent.value}`;
+  await copyText(text);
+}
+
+function resetGen() {
+  genForm.purpose = "";
+  genForm.role = "";
+  genForm.style = "结构清晰、可执行、简洁";
+  genForm.constraints = "";
+  genForm.sourceUrl = "";
+  genForm.sourceText = "";
+  genForm.saveAsNewVersion = true;
+  genPreview.value = "";
+}
+
+function normalizeUrl(input: string) {
+  const raw = String(input || "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function buildExternalContext(): Promise<string> {
+  const parts: string[] = [];
+  const url = normalizeUrl(genForm.sourceUrl);
+  if (url) {
+    const { knowledgeBase } = storeToRefs(hubStore);
+    const existing = knowledgeBase.value.find((k: any) => k?.sourceUrl === url);
+    let item: any = existing;
+    if (!item) {
+      const id = await hubStore.ingestUrl(url, ["prompt-gen"]);
+      item = knowledgeBase.value.find((k: any) => k.id === id);
     }
-  };
-  reader.readAsText(file);
-  target.value = '';
-};
+    if (item) {
+      const title = String(item?.title || "").trim();
+      const summary = String(item?.summary || "").trim();
+      const content = String(item?.content || "").trim();
+      const excerpt = content.length > 2500 ? content.slice(0, 2500) + "..." : content;
+      parts.push(`来源URL：${url}\n标题：${title || "(无)"}\n摘要：${summary || "(无)"}\n内容节选：\n${excerpt || "(无)"}`);
+    }
+  }
 
-const onDragChange = async () => {
-  await savePrompts();
-};
+  const extra = String(genForm.sourceText || "").trim();
+  if (extra) {
+    parts.push(extra);
+  }
+  return parts.join("\n\n---\n\n").trim();
+}
+
+async function generatePromptContent() {
+  if (!genForm.purpose.trim()) return;
+  isGenerating.value = true;
+  try {
+    const ctx = await buildExternalContext();
+    const prompt = `你是一个专业的 Prompt 生成助手。请根据输入信息生成高质量 system prompt（中文）。\n\n要求：\n- 输出必须只包含 system prompt 本体，不要输出其它文字\n- 必须包含：角色定义、工作目标、工作流程、输出格式要求、边界与禁止事项\n- 如果给了外部资料，必须将其作为上下文约束的一部分（不要原样复述大段资料）\n\n信息：\n目的：${genForm.purpose}\n角色：${genForm.role}\n风格：${genForm.style}\n约束：${genForm.constraints || "无"}\n\n外部资料：\n${ctx || "无"}`;
+    const res = await promptLLM(prompt);
+    genPreview.value = String(res || "").trim();
+    applyGenerated();
+
+    if (genForm.saveAsNewVersion && selectedPrompt.value) {
+      await promptsStore.saveNewVersion(selectedPrompt.value.id, editContent.value, "auto-gen");
+    }
+  } finally {
+    isGenerating.value = false;
+  }
+}
+
+function applyGenerated() {
+  if (!genPreview.value.trim()) return;
+  editContent.value = genPreview.value;
+}
+
+watch(
+  () => [selectedPrompt.value?.id, selectedPrompt.value?.currentVersionId],
+  () => {
+    if (!selectedPrompt.value || !selectedVersion.value) {
+      editTitle.value = "";
+      editContent.value = "";
+      return;
+    }
+    editTitle.value = selectedPrompt.value.title;
+    editContent.value = selectedVersion.value.content;
+  },
+  { immediate: true }
+);
+
+function formatTime(ts?: number) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${mm}-${dd} ${hh}:${mi}`;
+}
 
 onMounted(async () => {
-  await loadPrompts();
+  await promptsStore.loadData();
 });
 </script>
 
 <style scoped>
-.prompt-tool {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 40px 20px;
-  background-color: #f0f2f5;
-  min-height: 100vh;
-  box-sizing: border-box;
-}
-
-.header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-.header h1 {
-  font-size: 2.5rem;
-  color: #2c3e50;
-  margin: 0;
-}
-
-.header p {
-  color: #7f8c8d;
-  font-size: 1.1rem;
-  margin-top: 8px;
-}
-
-.main-content {
+.prompt-studio {
+  height: 100vh;
+  min-height: 0;
+  max-height: 100vh;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 30px;
-  width: 100%;
-  max-width: 900px;
+  grid-template-columns: 320px minmax(0, 1fr) 360px;
+  grid-template-rows: 1fr;
+  gap: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-@media (min-width: 768px) {
-  .main-content {
-    grid-template-columns: 1fr 1fr;
-  }
+.pane {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.prompt-form-card,
-.prompt-list-card {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border-radius: 12px;
-}
-
-.n-card {
-  background-color: #ffffff;
-}
-
-.prompt-list-card {
+:deep(.pane .n-card__content) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
-.card-header-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
+.studio-left,
+.studio-center,
+.studio-right {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
-.action-buttons {
+.prompt-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.left-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.prompt-item {
+  cursor: pointer;
+  margin-bottom: 8px;
+  padding: 10px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.prompt-item.active {
+  outline: 2px solid rgba(24, 160, 88, 0.35);
+  background: rgba(24, 160, 88, 0.08);
+}
+
+.prompt-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
-.card-title {
-  font-size: 1rem;
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.prompt-list-container {
-  max-height: 500px;
-  overflow-y: auto;
-  padding: 10px;
-}
-
-.draggable-list {
-  margin-bottom: 10px;
-  cursor: grab;
-  border-radius: 8px;
-}
-
-.draggable-list:active {
-  cursor: grabbing;
-}
-
-.draggable-list:last-child {
-  margin-bottom: 0;
-}
-
-.list-item-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.prompt-info {
-  flex-grow: 1;
-  padding-right: 20px;
-}
-
-.prompt-content-text {
-  color: #555;
-  margin: 0;
-  white-space: nowrap;
+.prompt-title {
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 250px;
+  white-space: nowrap;
 }
 
-.actions {
+.prompt-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.prompt-tags {
+  margin-top: 6px;
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.prompt-tag {
+  background: rgba(24, 160, 88, 0.12);
+  color: #18a058;
+}
+
+.center-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.version-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.version-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.version-tag {
+  cursor: pointer;
+}
+
+.editor-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-wrap :deep(.monaco-editor-container) {
+  min-height: 0 !important;
+  height: 100%;
+}
+
+.testbench {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   gap: 10px;
 }
 
-.n-button {
-  border-radius: 8px;
+.test-messages {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.02);
 }
 
-.no-data {
-  padding: 20px;
-  text-align: center;
+.test-message {
+  margin-bottom: 10px;
+}
+
+.test-message-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.test-message-time {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.test-message-content {
+  font-size: 13px;
+}
+
+.gen-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gen-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr) minmax(280px, 1.2fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.gen-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.gen-panel-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: rgba(0, 0, 0, 0.75);
+}
+
+.gen-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gen-preview-panel {
+  min-width: 280px;
+}
+
+.gen-preview-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gen-preview {
+  flex: 1;
+  min-height: 240px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 </style>

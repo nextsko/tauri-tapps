@@ -1,104 +1,99 @@
 <template>
-  <div class="web-chat-container">
+  <div
+    class="web-chat-container"
+    @dragover.prevent="handleDragOver"
+    @dragleave="handleDragLeave"
+    @drop.prevent="handleDrop"
+    :class="{ 'drag-over': isDragOver }"
+  >
     <n-layout has-sider>
       <!-- 侧边栏：已解析的网页列表 -->
       <n-layout-sider
+        v-model:collapsed="docSidebarCollapsed"
         bordered
         collapse-mode="width"
         :collapsed-width="0"
-        :width="280"
-        show-trigger="arrow-circle"
-        content-style="padding: 16px;"
+        :width="260"
+        :show-trigger="false"
+        content-style="padding: 12px; background: #fff;"
       >
-        <n-space vertical :size="12">
-          <n-text strong>已解析网页 ({{ parsedUrls.length }})</n-text>
+        <div class="sidebar-content">
+          <div class="sidebar-header">
+            <span class="sidebar-title">📄 已解析 ({{ parsedUrls.length }})</span>
+          </div>
 
-          <n-button type="primary" block @click="showAddUrlModal = true">
-            <template #icon>
-              <n-icon><AddOutline /></n-icon>
-            </template>
-            添加网页
-          </n-button>
+          <div class="sidebar-actions">
+            <n-button type="primary" size="small" @click="showAddUrlModal = true">
+              <template #icon>
+                <n-icon><AddOutline /></n-icon>
+              </template>
+              添加
+            </n-button>
+            <n-button
+              size="small"
+              quaternary
+              @click="handleClearUrls"
+              :disabled="parsedUrls.length === 0"
+            >
+              清空
+            </n-button>
+          </div>
 
-          <n-button
-            type="error"
-            block
-            secondary
-            @click="handleClearUrls"
-            :disabled="parsedUrls.length === 0"
-          >
-            清空列表
-          </n-button>
-
-          <n-divider style="margin: 8px 0" />
-
-          <n-scrollbar style="max-height: calc(100vh - 240px)">
-            <n-space vertical :size="8">
-              <n-card
+          <n-scrollbar class="sidebar-list">
+            <div class="url-list">
+              <div
                 v-for="parsed in parsedUrls"
                 :key="parsed.id"
-                size="small"
-                :title="getUrlTitle(parsed.url)"
+                class="url-item"
+                @click="openMarkdownEditor(parsed)"
               >
-                <template #header-extra>
+                <div class="url-item-header">
+                  <span class="url-item-title">{{ getUrlTitle(parsed.url) }}</span>
                   <n-button
                     text
-                    type="error"
-                    @click="removeParsedUrl(parsed.id)"
+                    size="tiny"
+                    @click.stop="removeParsedUrl(parsed.id)"
+                    class="url-item-close"
                   >
-                    <template #icon>
-                      <n-icon><CloseOutline /></n-icon>
-                    </template>
+                    <n-icon><CloseOutline /></n-icon>
                   </n-button>
-                </template>
-
-                <n-space vertical :size="4">
+                </div>
+                <div class="url-item-info">
                   <n-tag
-                    :type="
-                      parsed.status === 'success'
-                        ? 'success'
-                        : parsed.status === 'error'
-                        ? 'error'
-                        : 'info'
-                    "
-                    size="small"
+                    :type="parsed.status === 'success' ? 'success' : parsed.status === 'error' ? 'error' : 'info'"
+                    size="tiny"
+                    :bordered="false"
                   >
-                    {{
-                      parsed.status === "success"
-                        ? "成功"
-                        : parsed.status === "error"
-                        ? "失败"
-                        : "解析中"
-                    }}
+                    {{ parsed.status === "success" ? "成功" : parsed.status === "error" ? "失败" : "解析中" }}
                   </n-tag>
-
-                  <n-ellipsis
-                    style="max-width: 200px; font-size: 12px; color: #999"
+                  <span class="url-item-time">{{ formatParsedTime(parsed.updatedAt) }}</span>
+                  <span class="url-item-size" v-if="parsed.markdown">
+                    {{ (parsed.markdown.length / 1000).toFixed(1) }}k 字符
+                  </span>
+                </div>
+                <div class="url-item-tags" v-if="parsed.tags && parsed.tags.length">
+                  <n-tag
+                    v-for="tag in parsed.tags.slice(0, 3)"
+                    :key="tag"
+                    size="tiny"
+                    round
+                    :bordered="false"
+                    class="url-item-tag"
                   >
-                    {{ parsed.url }}
-                  </n-ellipsis>
-
-                  <n-text
-                    v-if="parsed.error"
-                    type="error"
-                    depth="3"
-                    style="font-size: 12px"
-                  >
-                    {{ parsed.error }}
-                  </n-text>
-
-                  <n-text
-                    v-else-if="parsed.markdown"
-                    depth="3"
-                    style="font-size: 12px"
-                  >
-                    {{ parsed.markdown.length }} 字符
-                  </n-text>
-                </n-space>
-              </n-card>
-            </n-space>
+                    {{ tag }}
+                  </n-tag>
+                  <span v-if="parsed.tags.length > 3" class="url-item-tag-more">
+                    +{{ parsed.tags.length - 3 }}
+                  </span>
+                </div>
+                <div class="url-item-preview" v-if="parsed.markdown">
+                  {{ getPreviewText(parsed.markdown) }}
+                </div>
+                <div class="url-item-url">{{ parsed.url }}</div>
+              </div>
+            </div>
           </n-scrollbar>
-        </n-space>
+        </div>
       </n-layout-sider>
 
       <!-- 主聊天区域 -->
@@ -112,12 +107,29 @@
           style="margin-bottom: 16px"
         >
           <n-space align="center">
+            <n-button
+              text
+              @click="docSidebarCollapsed = !docSidebarCollapsed"
+              :title="docSidebarCollapsed ? '展开文档列表' : '收起文档列表'"
+            >
+              <template #icon>
+                <n-icon size="18">
+                  <MenuOutline />
+                </n-icon>
+              </template>
+            </n-button>
             <n-text strong>网页智能对话</n-text>
             <n-button text type="info" @click="showHtmlModal = true">
               <template #icon>
                 <n-icon><CodeOutline /></n-icon>
               </template>
               HTML转Markdown
+            </n-button>
+            <n-button text type="primary" @click="showSystemPromptModal = true">
+              <template #icon>
+                <n-icon><SettingsOutline /></n-icon>
+              </template>
+              提示词
             </n-button>
           </n-space>
 
@@ -143,44 +155,21 @@
               :class="['message-item', msg.role]"
               @contextmenu.prevent="(e) => handleContextMenu(e, msg.id)"
             >
-              <n-card
-                size="small"
-                :bordered="false"
-                :content-style="{
-                  backgroundColor:
-                    msg.role === 'user'
-                      ? '#e3f2fd'
-                      : msg.role === 'assistant'
-                      ? '#f5f5f5'
-                      : '#fff3e0',
-                  padding: '12px',
-                }"
-              >
-                <n-space vertical :size="4">
-                  <n-text strong>
-                    {{
-                      msg.role === "user"
-                        ? "你"
-                        : msg.role === "assistant"
-                        ? "AI"
-                        : "系统"
-                    }}
-                  </n-text>
+              <div :class="['message-bubble', msg.role]">
+                <div class="message-header">
+                  <span class="message-role">
+                    {{ msg.role === "user" ? "你" : msg.role === "assistant" ? "AI" : "系统" }}
+                  </span>
+                  <span class="message-time">{{ formatTime(msg.timestamp) }}</span>
+                </div>
+                <div class="message-content">
                   <MarkdownRenderer
                     v-if="msg.role === 'assistant'"
                     :content="msg.content"
                   />
-                  <n-text
-                    v-else
-                    style="white-space: pre-wrap; word-break: break-word"
-                  >
-                    {{ msg.content }}
-                  </n-text>
-                  <n-text depth="3" style="font-size: 12px">
-                    {{ formatTime(msg.timestamp) }}
-                  </n-text>
-                </n-space>
-              </n-card>
+                  <span v-else>{{ msg.content }}</span>
+                </div>
+              </div>
             </div>
           </n-space>
         </n-scrollbar>
@@ -310,35 +299,126 @@
       :on-clickoutside="handleClickOutside"
       @select="handleContextMenuSelect"
     />
+
+    <!-- Markdown 编辑器模态框 -->
+    <n-modal
+      v-model:show="showMarkdownEditor"
+      preset="card"
+      :title="editingParsedUrl ? getUrlTitle(editingParsedUrl.url) : 'Markdown 编辑器'"
+      style="width: 90vw; max-width: 1200px;"
+      :bordered="false"
+      size="huge"
+    >
+      <template #header-extra>
+        <n-space>
+          <n-button type="primary" size="small" @click="saveMarkdownEdit">
+            保存
+          </n-button>
+        </n-space>
+      </template>
+      <n-space vertical :size="12" style="margin-bottom: 12px">
+        <n-space align="center" :size="8">
+          <n-text depth="3">标签</n-text>
+          <n-tag
+            v-for="tag in editingTags"
+            :key="tag"
+            size="small"
+            closable
+            round
+            :bordered="false"
+            @close="removeEditingTag(tag)"
+          >
+            {{ tag }}
+          </n-tag>
+        </n-space>
+        <n-space align="center" :size="8">
+          <n-input
+            v-model:value="newTag"
+            size="small"
+            placeholder="添加标签（回车确认）"
+            style="width: 240px"
+            @keyup.enter="addEditingTag"
+          />
+          <n-button size="small" @click="addEditingTag" :disabled="!newTag.trim()">
+            添加
+          </n-button>
+        </n-space>
+      </n-space>
+      <div class="markdown-editor-wrapper">
+        <MonacoEditor
+          v-model="editingMarkdown"
+          language="markdown"
+          theme="vs"
+        />
+      </div>
+    </n-modal>
+
+    <!-- 系统提示词设置模态框 -->
+    <n-modal
+      v-model:show="showSystemPromptModal"
+      preset="card"
+      title="系统提示词设置"
+      style="width: 700px;"
+      :bordered="false"
+    >
+      <template #header-extra>
+        <n-button type="primary" size="small" @click="handleSaveSystemPrompt">
+          保存
+        </n-button>
+      </template>
+      <n-space vertical :size="12">
+        <n-text depth="3">
+          系统提示词会在每次对话时作为上下文发送给 AI，用于设定 AI 的行为和角色。
+        </n-text>
+        <n-input
+          v-model:value="systemPrompt"
+          type="textarea"
+          placeholder="输入系统提示词..."
+          :autosize="{ minRows: 8, maxRows: 16 }"
+        />
+      </n-space>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
-import { AddOutline, CloseOutline, CodeOutline, CopyOutline, TrashOutline } from "@vicons/ionicons5";
+import { AddOutline, CloseOutline, CodeOutline, CopyOutline, MenuOutline, SettingsOutline, TrashOutline } from "@vicons/ionicons5";
 import { NIcon, useMessage } from "naive-ui";
 import { storeToRefs } from "pinia";
 import { computed, h, nextTick, onMounted, ref, watch } from "vue";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
+import MonacoEditor from "../components/MonacoEditor.vue";
 import { useSettingsStore } from "../stores/settings";
 import { useWebChatStore } from "../stores/webChat";
+import type { ParsedUrl } from "../stores/webChat";
 
 const webChatStore = useWebChatStore();
 const settingsStore = useSettingsStore();
 const message = useMessage();
 
-const { messages, parsedUrls, currentModel, isLoading } =
+const { messages, parsedUrls, currentModel, systemPrompt, isLoading } =
   storeToRefs(webChatStore);
 
 const userInput = ref("");
 const scrollbarRef = ref();
 const showAddUrlModal = ref(false);
+const isDragOver = ref(false);
+const docSidebarCollapsed = ref(false);
 const showHtmlModal = ref(false);
 const newUrl = ref("");
 const htmlInput = ref("");
 const convertUrl = ref("");
 const markdownOutput = ref("");
 const isConverting = ref(false);
+
+// Markdown 编辑器模态框
+const showMarkdownEditor = ref(false);
+const showSystemPromptModal = ref(false);
+const editingParsedUrl = ref<ParsedUrl | null>(null);
+const editingMarkdown = ref("");
+const editingTags = ref<string[]>([]);
+const newTag = ref("");
 
 // 右键菜单相关
 const showContextMenu = ref(false);
@@ -372,17 +452,119 @@ const modelOptions = computed(() => {
 onMounted(async () => {
   // 加载 LLM 配置
   await settingsStore.loadLLMConfig();
-  
+
   // 加载聊天数据
   if (!webChatStore.isDataLoaded) {
     await webChatStore.loadData();
   }
-  
+
   // 如果没有选择模型，使用第一个
   if (!currentModel.value && modelOptions.value.length > 0) {
     currentModel.value = modelOptions.value[0].value;
   }
 });
+
+/**
+ * 处理拖拽文件（DOM 原生 API - 支持文件和 URL）
+ */
+async function handleDroppedFile(file: File) {
+  const fileName = file.name.toLowerCase();
+
+  // 支持 HTML 文件
+  if (fileName.endsWith(".html") || fileName.endsWith(".htm")) {
+    message.info(`正在解析 HTML 文件: ${file.name}`);
+    try {
+      const htmlContent = await file.text();
+      const markdown = await webChatStore.htmlToMarkdown(htmlContent);
+
+      const id = Date.now().toString();
+      webChatStore.parsedUrls.push({
+        id,
+        url: `file://${file.name}`,
+        markdown,
+        tags: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        status: "success",
+      });
+
+      message.success(`HTML 文件解析成功`);
+    } catch (error) {
+      message.error(`HTML 解析失败: ${error}`);
+    }
+    return;
+  }
+
+  // 支持 Markdown 文件
+  if (fileName.endsWith(".md") || fileName.endsWith(".markdown")) {
+    message.info(`正在读取 Markdown 文件: ${file.name}`);
+    try {
+      const markdown = await file.text();
+
+      const id = Date.now().toString();
+      webChatStore.parsedUrls.push({
+        id,
+        url: `file://${file.name}`,
+        markdown,
+        tags: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        status: "success",
+      });
+
+      message.success(`Markdown 文件读取成功`);
+    } catch (error) {
+      message.error(`文件读取失败: ${error}`);
+    }
+    return;
+  }
+
+  // 支持纯文本文件
+  if (fileName.endsWith(".txt")) {
+    message.info(`正在读取文本文件: ${file.name}`);
+    try {
+      const text = await file.text();
+
+      const id = Date.now().toString();
+      webChatStore.parsedUrls.push({
+        id,
+        url: `file://${file.name}`,
+        markdown: text,
+        tags: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        status: "success",
+      });
+
+      message.success(`文本文件读取成功`);
+    } catch (error) {
+      message.error(`文件读取失败: ${error}`);
+    }
+    return;
+  }
+
+  // 支持 Windows .url 快捷方式文件
+  if (fileName.endsWith(".url")) {
+    message.info(`正在解析 URL 快捷方式...`);
+    try {
+      const content = await file.text();
+      // 解析 .url 文件格式：[InternetShortcut]\nURL=https://...
+      const urlMatch = content.match(/URL=(.+)/i);
+      if (urlMatch && urlMatch[1]) {
+        const targetUrl = urlMatch[1].trim();
+        await webChatStore.parseUrl(targetUrl);
+        message.success(`URL 快捷方式解析成功`);
+      } else {
+        message.error(`无法从 .url 文件中提取链接`);
+      }
+    } catch (error) {
+      message.error(`URL 快捷方式解析失败: ${error}`);
+    }
+    return;
+  }
+
+  message.warning(`不支持的文件格式: ${file.name}（支持 .html, .md, .txt, .url）`);
+}
 
 // 监听消息变化，自动滚动到底部
 watch(messages, async () => {
@@ -504,6 +686,15 @@ async function handleCopyMarkdown() {
 }
 
 /**
+ * 保存系统提示词
+ */
+function handleSaveSystemPrompt() {
+  webChatStore.saveData();
+  showSystemPromptModal.value = false;
+  message.success("系统提示词已保存");
+}
+
+/**
  * 清空对话
  */
 function handleClearChat() {
@@ -524,6 +715,68 @@ function handleClearUrls() {
  */
 function removeParsedUrl(id: string) {
   webChatStore.removeParsedUrl(id);
+}
+
+/**
+ * 打开 Markdown 编辑器
+ */
+function openMarkdownEditor(parsed: ParsedUrl) {
+  editingParsedUrl.value = parsed;
+  editingMarkdown.value = parsed.markdown || "";
+  editingTags.value = Array.isArray(parsed.tags) ? [...parsed.tags] : [];
+  newTag.value = "";
+  showMarkdownEditor.value = true;
+}
+
+/**
+ * 保存 Markdown 编辑
+ */
+function saveMarkdownEdit() {
+  if (editingParsedUrl.value) {
+    const index = webChatStore.parsedUrls.findIndex(p => p.id === editingParsedUrl.value!.id);
+    if (index !== -1) {
+      webChatStore.parsedUrls[index].markdown = editingMarkdown.value;
+      webChatStore.parsedUrls[index].tags = [...editingTags.value];
+      webChatStore.parsedUrls[index].updatedAt = Date.now();
+      webChatStore.saveData();
+      message.success("保存成功");
+    }
+  }
+  showMarkdownEditor.value = false;
+}
+
+function addEditingTag() {
+  const t = newTag.value.trim();
+  if (!t) return;
+  if (!editingTags.value.includes(t)) {
+    editingTags.value.push(t);
+  }
+  newTag.value = "";
+}
+
+function removeEditingTag(tag: string) {
+  editingTags.value = editingTags.value.filter((t) => t !== tag);
+}
+
+function formatParsedTime(ts?: number) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${mm}-${dd} ${hh}:${mi}`;
+}
+
+function getPreviewText(markdown: string) {
+  const text = markdown
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]*`/g, " ")
+    .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+    .replace(/[#>*_\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.slice(0, 80);
 }
 
 /**
@@ -585,16 +838,90 @@ async function handleContextMenuSelect(key: string) {
 function handleClickOutside() {
   showContextMenu.value = false;
 }
+
+/**
+ * 拖拽进入
+ */
+function handleDragOver(e: DragEvent) {
+  isDragOver.value = true;
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = "copy";
+  }
+}
+
+/**
+ * 拖拽离开
+ */
+function handleDragLeave() {
+  isDragOver.value = false;
+}
+
+/**
+ * 拖拽放下 - 解析 URL 或文件
+ */
+async function handleDrop(e: DragEvent) {
+  isDragOver.value = false;
+
+  if (!e.dataTransfer) return;
+
+  // 1. 优先处理文件拖拽（HTML、Markdown 文件）
+  const files = e.dataTransfer.files;
+  if (files && files.length > 0) {
+    for (const file of Array.from(files)) {
+      await handleDroppedFile(file);
+    }
+    return;
+  }
+
+  // 2. 处理 URL 拖拽（从浏览器拖拽链接）
+  const url = e.dataTransfer.getData("text/uri-list")
+    || e.dataTransfer.getData("text/plain")
+    || e.dataTransfer.getData("URL");
+
+  if (url && isValidUrl(url)) {
+    message.info(`正在解析: ${url}`);
+    try {
+      await webChatStore.parseUrl(url.trim());
+      message.success("网页解析成功");
+    } catch (error) {
+      message.error(`解析失败: ${error}`);
+    }
+  } else if (url) {
+    // 可能是纯文本，尝试作为内容添加
+    message.warning("无法识别的内容格式");
+  }
+}
+
+/**
+ * 验证 URL 格式
+ */
+function isValidUrl(str: string): boolean {
+  try {
+    const url = new URL(str);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 </script>
 
 <style scoped>
 .web-chat-container {
   height: 100vh;
   overflow: hidden;
+  transition: all 0.2s ease;
+  background: #fafafa;
 }
 
+.web-chat-container.drag-over {
+  background: rgba(24, 160, 88, 0.08);
+  border: 2px dashed #18a058;
+}
+
+/* 消息项容器 */
 .message-item {
-  max-width: 80%;
+  max-width: 85%;
+  padding: 0 8px;
 }
 
 .message-item.user {
@@ -608,5 +935,198 @@ function handleClickOutside() {
 .message-item.system {
   margin: 0 auto;
   max-width: 60%;
+}
+
+/* 消息气泡 */
+.message-bubble {
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+}
+
+.message-bubble:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.message-bubble.user {
+  background: #18a058;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.message-bubble.assistant {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-bottom-left-radius: 4px;
+}
+
+.message-bubble.system {
+  background: #fff8e6;
+  border: 1px solid #ffe58f;
+}
+
+/* 消息头部 */
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.message-role {
+  font-weight: 600;
+}
+
+.message-bubble.user .message-role {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.message-bubble.assistant .message-role {
+  color: #18a058;
+}
+
+.message-time {
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+/* 消息内容 */
+.message-content {
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.message-bubble.user .message-content {
+  color: #fff;
+}
+
+.message-bubble.assistant .message-content {
+  color: #333;
+}
+
+/* 侧边栏样式 */
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.sidebar-header {
+  margin-bottom: 12px;
+}
+
+.sidebar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.sidebar-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.sidebar-list {
+  flex: 1;
+  max-height: calc(100vh - 160px);
+}
+
+.url-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.url-item {
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+}
+
+.url-item:hover {
+  border-color: rgba(24, 160, 88, 0.25);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.10);
+  transform: translateY(-1px);
+}
+
+.url-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.url-item:hover .url-item-close {
+  opacity: 1;
+}
+
+.url-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.url-item-time {
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+.url-item-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.url-item-tag {
+  background: rgba(24, 160, 88, 0.12);
+  color: #18a058;
+}
+
+.url-item-tag-more {
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+.url-item-preview {
+  font-size: 12px;
+  color: #555;
+  line-height: 1.45;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.url-item-size {
+  font-size: 11px;
+  color: #999;
+}
+
+.url-item-url {
+  font-size: 11px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Markdown 编辑器 */
+.markdown-editor-wrapper {
+  height: 70vh;
+  min-height: 500px;
 }
 </style>
