@@ -33,17 +33,6 @@
       "icons/icon.ico"
     ],
     "publisher": "fromsko",
-    "homepage": "https://github.com/nextsko/tauri-tapps",
-    "createUpdaterArtifacts": true
-  },
-  "plugins": {
-    "updater": {
-      "active": true,
-      "endpoints": [
-        "https://github.com/nextsko/tauri-tapps/releases/latest/download/latest.json"
-      ],
-      "dialog": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5QjMyQzY3NjUxQ0E3MEMKUldRTXB4eGxaeXl6dVVWaFVMb01JR3Vtb0pTcTJKWllKK1d1eDJVaVlvQStnWUJiZlh5N0Rwb0cK"
-    }
+    "homepage": "https://github.com/nextsko/tauri-tapps"
   }
 }
