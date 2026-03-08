@@ -40,8 +40,6 @@
         </n-layout>
       </div>
 
-      <!-- 更新检查器 -->
-      <UpdateChecker ref="updateCheckerRef" />
     </n-config-provider>
   </n-message-provider>
 </template>
@@ -63,7 +61,6 @@ import { h, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSettingsStore } from "./stores/settings";
 import { useUIStore } from "./stores/ui";
-import UpdateChecker from "./components/UpdateChecker.vue";
 
 const router = useRouter();
 const route = useRoute();
